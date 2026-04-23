@@ -6,7 +6,7 @@ use crate::{
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env,
+    token, Address, BytesN, Env, Map, Symbol, TryIntoVal, Val,
 };
 
 // ---------------------------------------------------------------------------
@@ -348,4 +348,100 @@ fn test_stealth_register_fails_when_paused() {
         .unwrap();
 
     assert_eq!(err, QuickexError::ContractPaused);
+}
+
+#[test]
+fn test_event_snapshot_ephemeral_key_registered_schema() {
+    let (env, client) = setup();
+    let token = create_test_token(&env);
+    let sender = Address::generate(&env);
+    let amount: i128 = 1_000;
+
+    let eph_pub: BytesN<32> = BytesN::from_array(&env, &[1u8; 32]);
+    let spend_pub: BytesN<32> = BytesN::from_array(&env, &[2u8; 32]);
+    let stealth_address = compute_stealth_address(&env, &eph_pub, &spend_pub);
+
+    mint(&env, &token, &sender, amount);
+
+    client.register_ephemeral_key(&make_params(
+        sender.clone(),
+        token.clone(),
+        amount,
+        eph_pub.clone(),
+        spend_pub.clone(),
+        stealth_address.clone(),
+        0,
+    ));
+
+    let (topics, data) = crate::test::latest_contract_event(&env, &client.address);
+
+    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
+    let t1: Symbol = topics.get(1).unwrap().try_into_val(&env).unwrap();
+    let t2: BytesN<32> = topics.get(2).unwrap().try_into_val(&env).unwrap();
+    let t3: BytesN<32> = topics.get(3).unwrap().try_into_val(&env).unwrap();
+    let t4: Address = topics.get(4).unwrap().try_into_val(&env).unwrap();
+
+    assert_eq!(t0, Symbol::new(&env, "TOPIC_STEALTH"));
+    assert_eq!(t1, Symbol::new(&env, "EphemeralKeyRegistered"));
+    assert_eq!(t2, stealth_address);
+    assert_eq!(t3, eph_pub);
+    assert_eq!(t4, sender);
+
+    let data_map: Map<Symbol, Val> = crate::test::event_data_map(&env, data);
+    assert!(data_map.get(Symbol::new(&env, "token")).is_some());
+    assert!(data_map.get(Symbol::new(&env, "amount")).is_some());
+    assert!(data_map.get(Symbol::new(&env, "expires_at")).is_some());
+    assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
+}
+
+#[test]
+fn test_event_snapshot_stealth_withdrawn_schema() {
+    let (env, client) = setup();
+    let token = create_test_token(&env);
+    let sender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let amount: i128 = 1_000;
+
+    let eph_pub: BytesN<32> = BytesN::from_array(&env, &[1u8; 32]);
+    let spend_pub: BytesN<32> = BytesN::from_array(&env, &[2u8; 32]);
+    let stealth_address = compute_stealth_address(&env, &eph_pub, &spend_pub);
+
+    mint(&env, &token, &sender, amount);
+
+    client.register_ephemeral_key(&make_params(
+        sender,
+        token.clone(),
+        amount,
+        eph_pub.clone(),
+        spend_pub.clone(),
+        stealth_address.clone(),
+        0,
+    ));
+
+    client.stealth_withdraw(&recipient, &eph_pub, &spend_pub, &stealth_address);
+
+    let (topics, data) = crate::test::latest_contract_event(&env, &client.address);
+
+    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
+    let t1: Symbol = topics.get(1).unwrap().try_into_val(&env).unwrap();
+    let t2: BytesN<32> = topics.get(2).unwrap().try_into_val(&env).unwrap();
+    let t3: Address = topics.get(3).unwrap().try_into_val(&env).unwrap();
+
+    assert_eq!(t0, Symbol::new(&env, "TOPIC_STEALTH"));
+    assert_eq!(t1, Symbol::new(&env, "StealthWithdrawn"));
+    assert_eq!(t2, stealth_address);
+    assert_eq!(t3, recipient);
+
+    let data_map: Map<Symbol, Val> = crate::test::event_data_map(&env, data);
+    assert!(data_map.get(Symbol::new(&env, "token")).is_some());
+    assert!(data_map.get(Symbol::new(&env, "amount")).is_some());
+    assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
 }

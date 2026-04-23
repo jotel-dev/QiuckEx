@@ -1,5 +1,5 @@
 use crate::errors::QuickexError;
-use crate::events::{publish_admin_changed, publish_contract_paused};
+use crate::events::{publish_admin_changed, publish_contract_paused, publish_pause_flags_changed};
 use crate::storage;
 use crate::types::FeeConfig; // Added this import for FeeConfig
 use soroban_sdk::{Address, Env};
@@ -98,6 +98,7 @@ pub fn set_pause_flags(
     require_admin(env, caller)?;
 
     storage::set_pause_flags(env, caller, flags_to_enable, flags_to_disable);
+    publish_pause_flags_changed(env, caller.clone(), flags_to_enable, flags_to_disable);
 
     Ok(())
 }

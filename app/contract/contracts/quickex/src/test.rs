@@ -250,7 +250,7 @@ fn assert_contract_error<T>(
     }
 }
 
-fn latest_contract_event(env: &Env, contract_id: &Address) -> (soroban_sdk::Vec<Val>, Val) {
+pub(crate) fn latest_contract_event(env: &Env, contract_id: &Address) -> (soroban_sdk::Vec<Val>, Val) {
     let all = env.events().all();
     let len = all.len();
 
@@ -264,7 +264,7 @@ fn latest_contract_event(env: &Env, contract_id: &Address) -> (soroban_sdk::Vec<
     panic!("no contract event found for contract id")
 }
 
-fn event_data_map(env: &Env, data: Val) -> Map<Symbol, Val> {
+pub(crate) fn event_data_map(env: &Env, data: Val) -> Map<Symbol, Val> {
     data.try_into_val(env).unwrap()
 }
 
@@ -479,8 +479,15 @@ fn test_event_snapshot_privacy_toggled_schema() {
     assert_eq!(t2, account);
 
     let data_map = event_data_map(&env, data);
+    // Golden Check: Exactly 4 fields (account, enabled, timestamp, version)
+    assert_eq!(data_map.len(), 4);
+    assert!(data_map.get(Symbol::new(&env, "account")).is_some());
     assert!(data_map.get(Symbol::new(&env, "enabled")).is_some());
     assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
 }
 
 #[test]
@@ -614,10 +621,16 @@ fn test_event_snapshot_escrow_deposited_schema() {
     assert_eq!(t3, user);
 
     let data_map = event_data_map(&env, data);
+    // Golden Check: Exactly 5 fields (token, amount, expires_at, timestamp, version)
+    assert_eq!(data_map.len(), 5);
     assert!(data_map.get(Symbol::new(&env, "token")).is_some());
     assert!(data_map.get(Symbol::new(&env, "amount")).is_some());
     assert!(data_map.get(Symbol::new(&env, "expires_at")).is_some());
     assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
 }
 
 #[test]
@@ -655,9 +668,15 @@ fn test_event_snapshot_escrow_withdrawn_schema() {
     assert_eq!(t3, to);
 
     let data_map = event_data_map(&env, data);
+    // Golden Check: Exactly 5 fields (token, amount, fee, timestamp, version)
+    assert_eq!(data_map.len(), 5);
     assert!(data_map.get(Symbol::new(&env, "token")).is_some());
     assert!(data_map.get(Symbol::new(&env, "amount")).is_some());
     assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
 }
 
 #[test]
@@ -691,9 +710,15 @@ fn test_event_snapshot_escrow_refunded_schema() {
     assert_eq!(t3, owner);
 
     let data_map = event_data_map(&env, data);
+    // Golden Check: Exactly 4 fields (token, amount, timestamp, version)
+    assert_eq!(data_map.len(), 4);
     assert!(data_map.get(Symbol::new(&env, "token")).is_some());
     assert!(data_map.get(Symbol::new(&env, "amount")).is_some());
     assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
 }
 
 #[test]
@@ -725,6 +750,10 @@ fn test_event_snapshot_escrow_disputed_schema() {
 
     let data_map = event_data_map(&env, data);
     assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
 }
 
 #[test]
@@ -746,8 +775,44 @@ fn test_event_snapshot_contract_paused_schema() {
     assert_eq!(t2, admin);
 
     let data_map = event_data_map(&env, data);
+    // Golden Check: Exactly 3 fields (paused, timestamp, version)
+    assert_eq!(data_map.len(), 3);
     assert!(data_map.get(Symbol::new(&env, "paused")).is_some());
     assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
+}
+
+#[test]
+fn test_event_snapshot_pause_flags_changed_schema() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    client.pause_features(&admin, &1); // Deposit flag
+
+    let (topics, data) = latest_contract_event(&env, &client.address);
+
+    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
+    let t1: Symbol = topics.get(1).unwrap().try_into_val(&env).unwrap();
+    let t2: Address = topics.get(2).unwrap().try_into_val(&env).unwrap();
+
+    assert_eq!(t0, Symbol::new(&env, "TOPIC_ADMIN"));
+    assert_eq!(t1, Symbol::new(&env, "PauseFlagsChanged"));
+    assert_eq!(t2, admin);
+
+    let data_map = event_data_map(&env, data);
+    // Golden Check: Exactly 4 fields (enabled, disabled, timestamp, version)
+    assert_eq!(data_map.len(), 4);
+    assert!(data_map.get(Symbol::new(&env, "enabled")).is_some());
+    assert!(data_map.get(Symbol::new(&env, "disabled")).is_some());
+    assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
 }
 
 #[test]
@@ -1023,6 +1088,95 @@ fn test_event_snapshot_admin_changed_schema() {
 
     let data_map = event_data_map(&env, data);
     assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
+}
+
+#[test]
+fn test_event_snapshot_contract_upgraded_schema() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let new_wasm_hash = BytesN::from_array(&env, &[1u8; 32]);
+
+    client.initialize(&admin);
+    let _ = client.try_upgrade(&admin, &new_wasm_hash);
+
+    let (topics, data) = latest_contract_event(&env, &client.address);
+
+    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
+    let t1: Symbol = topics.get(1).unwrap().try_into_val(&env).unwrap();
+    let t2: BytesN<32> = topics.get(2).unwrap().try_into_val(&env).unwrap();
+    let t3: Address = topics.get(3).unwrap().try_into_val(&env).unwrap();
+
+    assert_eq!(t0, Symbol::new(&env, "TOPIC_ADMIN"));
+    assert_eq!(t1, Symbol::new(&env, "ContractUpgraded"));
+    assert_eq!(t2, new_wasm_hash);
+    assert_eq!(t3, admin);
+
+    let data_map = event_data_map(&env, data);
+    assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
+}
+
+#[test]
+fn test_event_snapshot_fee_config_changed_schema() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    let config = crate::types::FeeConfig { fee_bps: 100 };
+    client.set_fee_config(&admin, &config);
+
+    let (topics, data) = latest_contract_event(&env, &client.address);
+
+    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
+    let t1: Symbol = topics.get(1).unwrap().try_into_val(&env).unwrap();
+
+    assert_eq!(t0, Symbol::new(&env, "TOPIC_ADMIN"));
+    assert_eq!(t1, Symbol::new(&env, "FeeConfigChanged"));
+
+    let data_map = event_data_map(&env, data);
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "fee_bps")).unwrap(),
+        100u32.into_val(&env)
+    );
+    assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
+}
+
+#[test]
+fn test_event_snapshot_platform_wallet_changed_schema() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let wallet = Address::generate(&env);
+
+    client.initialize(&admin);
+    client.set_platform_wallet(&admin, &wallet);
+
+    let (topics, data) = latest_contract_event(&env, &client.address);
+
+    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
+    let t1: Symbol = topics.get(1).unwrap().try_into_val(&env).unwrap();
+    let t2: Address = topics.get(2).unwrap().try_into_val(&env).unwrap();
+
+    assert_eq!(t0, Symbol::new(&env, "TOPIC_ADMIN"));
+    assert_eq!(t1, Symbol::new(&env, "PlatformWalletChanged"));
+    assert_eq!(t2, wallet);
+
+    let data_map = event_data_map(&env, data);
+    assert!(data_map.get(Symbol::new(&env, "timestamp")).is_some());
+    assert_eq!(
+        data_map.get(Symbol::new(&env, "version")).unwrap(),
+        2u32.into_val(&env)
+    );
 }
 
 #[test]

@@ -159,6 +159,7 @@ pub fn register_ephemeral_key(
         env,
         stealth_address.clone(),
         eph_pub,
+        sender,
         token,
         amount,
         expires_at,
