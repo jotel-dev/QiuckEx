@@ -371,12 +371,7 @@ pub struct PauseFlagsChangedEvent {
     pub version: u32,
 }
 
-pub(crate) fn publish_pause_flags_changed(
-    env: &Env,
-    actor: Address,
-    enabled: u64,
-    disabled: u64,
-) {
+pub(crate) fn publish_pause_flags_changed(env: &Env, actor: Address, enabled: u64, disabled: u64) {
     PauseFlagsChangedEvent {
         actor,
         enabled,

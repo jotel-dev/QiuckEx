@@ -250,7 +250,10 @@ fn assert_contract_error<T>(
     }
 }
 
-pub(crate) fn latest_contract_event(env: &Env, contract_id: &Address) -> (soroban_sdk::Vec<Val>, Val) {
+pub(crate) fn latest_contract_event(
+    env: &Env,
+    contract_id: &Address,
+) -> (soroban_sdk::Vec<Val>, Val) {
     let all = env.events().all();
     let len = all.len();
 
