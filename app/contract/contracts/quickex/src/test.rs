@@ -32,7 +32,8 @@ use soroban_sdk::{
     testutils::{Address as _, Events as _, Ledger},
     token,
     xdr::ToXdr,
-    Address, Bytes, BytesN, ConversionError, Env, InvokeError, Map, Symbol, TryIntoVal, Val,
+    Address, Bytes, BytesN, ConversionError, Env, IntoVal, InvokeError, Map, Symbol, TryIntoVal,
+    Val,
 };
 
 #[contract]
@@ -165,7 +166,7 @@ fn test_get_escrow_details_privacy_enabled_hides_sensitive_fields() {
     // Enable privacy for the owner
     client.set_privacy(&owner, &true);
 
-    // Stranger queries â€” sensitive fields must be hidden
+    // Stranger queries — sensitive fields must be hidden
     let view = client.get_escrow_details(&commitment, &stranger).unwrap();
     assert_eq!(view.token, token);
     assert_eq!(view.status, EscrowStatus::Pending);
@@ -201,7 +202,7 @@ fn test_get_escrow_details_privacy_enabled_owner_sees_full_details() {
     // Enable privacy for the owner
     client.set_privacy(&owner, &true);
 
-    // Owner queries their own escrow â€” must see full details
+    // Owner queries their own escrow — must see full details
     let view = client.get_escrow_details(&commitment, &owner).unwrap();
     assert_eq!(view.token, token);
     assert_eq!(view.status, EscrowStatus::Pending);
@@ -211,7 +212,7 @@ fn test_get_escrow_details_privacy_enabled_owner_sees_full_details() {
 
 #[test]
 fn test_get_escrow_details_privacy_disabled_shows_full_details() {
-    // Privacy off (default) â€” any caller gets the full view.
+    // Privacy off (default) — any caller gets the full view.
     let (env, client) = setup();
     let token = create_test_token(&env);
     let owner = Address::generate(&env);
@@ -235,7 +236,7 @@ fn test_get_escrow_details_privacy_disabled_shows_full_details() {
         0,
     );
 
-    // Privacy is off (never set) â€” stranger still gets full data
+    // Privacy is off (never set) — stranger still gets full data
     let view = client.get_escrow_details(&commitment, &stranger).unwrap();
     assert_eq!(view.amount, Some(amount));
     assert_eq!(view.owner, Some(owner));
@@ -259,7 +260,7 @@ fn test_set_privacy_already_set_fails() {
 /// Regression suite: privacy toggle — ensures upgrades do not break set_privacy/get_privacy.
 #[test]
 fn test_set_privacy_toggle_cycle_succeeds() {
-    // false â†’ true â†’ false â†’ true must all succeed without error.
+    // false → true → false → true must all succeed without error.
     let (env, client) = setup();
     let account = Address::generate(&env);
 
@@ -898,21 +899,6 @@ fn test_set_privacy_same_value_fails() {
     assert_contract_error(second, QuickexError::PrivacyAlreadySet);
 }
 
-// fn test_deposit_with_commitment_fails_when_paused() {
-//     let (env, client) = setup();
-//     let admin = Address::generate(&env);
-//     let user = Address::generate(&env);
-//     let token = create_test_token(&env);
-//     let amount: i128 = 500;
-//     let commitment = BytesN::from_array(&env, &[9u8; 32]);
-
-//     client.initialize(&admin);
-//     client.set_paused(&admin, &true);
-
-//     let result = client.try_deposit_with_commitment(&user, &token, &amount, &commitment, &0);
-//     assert_contract_error(result, QuickexError::ContractPaused);
-// }
-
 #[test]
 fn test_deposit_with_commitment_fails_when_paused() {
     let env = Env::default();
@@ -1004,7 +990,6 @@ fn test_refund_fails_when_paused() {
     let salt = Bytes::from_slice(&env, b"refund_salt");
     let admin = Address::generate(&env);
 
-    // Use contract deposit to get owner correctly stored
     let token_client = token::StellarAssetClient::new(&env, &token);
     token_client.mint(&owner, &amount);
 
@@ -1033,7 +1018,6 @@ fn test_refund_pause_unpause() {
     let salt = Bytes::from_slice(&env, b"refund_salt");
     let admin = Address::generate(&env);
 
-    // Use contract deposit to get owner correctly stored
     let token_client = token::StellarAssetClient::new(&env, &token);
     token_client.mint(&owner, &amount);
 
@@ -1486,7 +1470,7 @@ fn test_get_escrow_details_found() {
 
     setup_escrow(&env, &client.address, &token, amount, commitment.clone(), 0);
 
-    // Privacy is off by default â€” any caller gets full data
+    // Privacy is off by default — any caller gets full data
     let caller = Address::generate(&env);
     let details = client.get_escrow_details(&commitment, &caller);
     assert!(details.is_some());
@@ -1546,7 +1530,7 @@ fn test_get_escrow_details_spent_status() {
         put_escrow(&env, &storage_commitment, &entry);
     });
 
-    // Privacy off â€” caller is a stranger, still gets full data
+    // Privacy off — caller is a stranger, still gets full data
     let caller = Address::generate(&env);
     let details = client.get_escrow_details(&commitment, &caller);
     assert!(details.is_some());
@@ -1556,6 +1540,7 @@ fn test_get_escrow_details_spent_status() {
     assert_eq!(retrieved.amount, Some(amount));
     assert_eq!(retrieved.token, token);
 }
+
 // ============================================================================
 // Upgrade Tests
 // ============================================================================
@@ -1571,18 +1556,11 @@ fn test_upgrade_by_admin() {
     // Create a dummy WASM hash for testing
     let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
 
-    // Admin calls upgrade - this tests the authorization logic
-    // Note: In test environment, update_current_contract_wasm may fail
-    // because the WASM hash doesn't exist, but the auth check should pass.
-    // We use try_upgrade to verify auth passes (not Unauthorized error)
     let result = client.try_upgrade(&admin, &new_wasm_hash);
 
-    // The call should NOT fail with Unauthorized (Contract error #2)
-    // It may fail with a host error because the WASM doesn't exist in test env
     match result {
-        Ok(_) => {} // Upgrade succeeded (unexpected in test env, but valid)
+        Ok(_) => {}
         Err(Ok(contract_error)) => {
-            // This is a contract error - should NOT be Unauthorized
             assert_ne!(
                 contract_error,
                 QuickexError::Unauthorized,
@@ -1591,7 +1569,6 @@ fn test_upgrade_by_admin() {
         }
         Err(Err(_host_error)) => {
             // Host error (e.g., WASM hash not found) - this is expected
-            // The important thing is the auth check passed
         }
     }
 }
@@ -1743,7 +1720,7 @@ fn test_withdrawal_fails_after_expiry() {
     // 2. Advance time past expiry
     env.ledger().set_timestamp(expires_at + 1);
 
-    // Withdrawal should fail with EscrowExpired (error #13)
+    // Withdrawal should fail with EscrowExpired
     let res = client.try_withdraw(&token, &amount, &commitment2, &to, &salt2);
     assert_eq!(res, Err(Ok(crate::errors::QuickexError::EscrowExpired)));
 }
@@ -1757,7 +1734,6 @@ fn test_refund_successful() {
     let amount: i128 = 1000;
     let salt = Bytes::from_slice(&env, b"refund_salt");
 
-    // Use contract deposit to get owner correctly stored
     let token_client = token::StellarAssetClient::new(&env, &token);
     token_client.mint(&owner, &amount);
 
@@ -1767,7 +1743,7 @@ fn test_refund_successful() {
     let start_time = env.ledger().timestamp();
     let expires_at = start_time + timeout;
 
-    // Try refund early - should fail with EscrowNotExpired (error #14)
+    // Try refund early - should fail with EscrowNotExpired
     env.ledger().set_timestamp(expires_at - 1);
     let res = client.try_refund(&commitment, &owner);
     assert_eq!(res, Err(Ok(crate::errors::QuickexError::EscrowNotExpired)));
@@ -1804,7 +1780,7 @@ fn test_refund_unauthorized_fails() {
     // Advance past expiry
     env.ledger().set_timestamp(env.ledger().timestamp() + 101);
 
-    // Thief tries to refund - should fail with InvalidOwner (error #15)
+    // Thief tries to refund - should fail with InvalidOwner
     let res = client.try_refund(&commitment, &thief);
     assert_eq!(res, Err(Ok(crate::errors::QuickexError::InvalidOwner)));
 }
@@ -1815,7 +1791,7 @@ fn test_double_refund_fails() {
     let token = create_test_token(&env);
     let owner = Address::generate(&env);
     let amount: i128 = 1000;
-    let salt = Bytes::from_slice(&env, b"double_refund");
+    let salt = Bytes::from_slice(&env, b"double_refund"));
 
     token::StellarAssetClient::new(&env, &token).mint(&owner, &amount);
     let commitment = client.deposit(&token, &amount, &owner, &salt, &100, &None);
@@ -1824,7 +1800,7 @@ fn test_double_refund_fails() {
 
     client.refund(&commitment, &owner);
 
-    // Second refund attempt - should fail with AlreadySpent (error #9)
+    // Second refund attempt - should fail with AlreadySpent
     let res = client.try_refund(&commitment, &owner);
     assert_eq!(res, Err(Ok(crate::errors::QuickexError::AlreadySpent)));
 }
@@ -2208,11 +2184,8 @@ fn test_get_escrow_details_shows_arbiter_to_owner_and_arbiter() {
 // ============================================================================
 
 /// Test helper: Create a mock native XLM asset address
-/// In production, this would be the actual Stellar network native asset address
 #[allow(dead_code)]
 fn create_native_xlm_mock(env: &Env) -> Address {
-    // For testing purposes, we generate a specific address to represent XLM
-    // In production on mainnet, this would be the actual native asset identifier
     Address::generate(env)
 }
 
@@ -2228,21 +2201,17 @@ fn create_sac_token<'a>(env: &'a Env, _name: &str) -> (Address, token::StellarAs
 
 #[test]
 fn test_cross_asset_native_xlm_deposit_withdrawal() {
-    // Test complete flow with native XLM
     let (env, client) = setup();
-    let xlm_token = create_test_token(&env); // Use regular test token instead of mock
+    let xlm_token = create_test_token(&env);
     let user = Address::generate(&env);
-    let amount: i128 = 10_000_000; // 10 XLM in stroops (assuming 7 decimals)
+    let amount: i128 = 10_000_000;
     let salt = Bytes::from_slice(&env, b"xlm_test_salt");
 
-    // Simulate minting XLM to user (in production, this would be actual XLM)
     let xlm_client = token::StellarAssetClient::new(&env, &xlm_token);
     xlm_client.mint(&user, &amount);
 
-    // Deposit XLM into escrow
     let commitment = client.deposit(&xlm_token, &amount, &user, &salt, &0, &None);
 
-    // Verify escrow created
     assert_eq!(
         client.get_commitment_state(&commitment),
         Some(EscrowStatus::Pending)
@@ -2250,11 +2219,9 @@ fn test_cross_asset_native_xlm_deposit_withdrawal() {
     assert_eq!(xlm_client.balance(&user), 0);
     assert_eq!(xlm_client.balance(&client.address), amount);
 
-    // Withdraw XLM from escrow
     let result = client.withdraw(&xlm_token, &amount, &commitment, &user, &salt);
     assert!(result);
 
-    // Verify balances after withdrawal
     assert_eq!(xlm_client.balance(&user), amount);
     assert_eq!(xlm_client.balance(&client.address), 0);
     assert_eq!(
@@ -2265,20 +2232,16 @@ fn test_cross_asset_native_xlm_deposit_withdrawal() {
 
 #[test]
 fn test_cross_asset_usdc_sac_deposit_withdrawal() {
-    // Test complete flow with USDC (SAC token)
     let (env, client) = setup();
     let (usdc_token, usdc_client) = create_sac_token(&env, "USDC");
     let user = Address::generate(&env);
-    let amount: i128 = 100_000_000; // 100 USDC (6 decimals)
+    let amount: i128 = 100_000_000;
     let salt = Bytes::from_slice(&env, b"usdc_test_salt");
 
-    // Mint USDC to user
     usdc_client.mint(&user, &amount);
 
-    // Deposit USDC into escrow
     let commitment = client.deposit(&usdc_token, &amount, &user, &salt, &0, &None);
 
-    // Verify escrow created
     assert_eq!(
         client.get_commitment_state(&commitment),
         Some(EscrowStatus::Pending)
@@ -2286,11 +2249,9 @@ fn test_cross_asset_usdc_sac_deposit_withdrawal() {
     assert_eq!(usdc_client.balance(&user), 0);
     assert_eq!(usdc_client.balance(&client.address), amount);
 
-    // Withdraw USDC from escrow
     let result = client.withdraw(&usdc_token, &amount, &commitment, &user, &salt);
     assert!(result);
 
-    // Verify balances after withdrawal
     assert_eq!(usdc_client.balance(&user), amount);
     assert_eq!(usdc_client.balance(&client.address), 0);
     assert_eq!(
@@ -2301,28 +2262,22 @@ fn test_cross_asset_usdc_sac_deposit_withdrawal() {
 
 #[test]
 fn test_cross_asset_custom_token_deposit_refund() {
-    // Test refund flow with a custom SAC token
     let (env, client) = setup();
     let (custom_token, custom_client) = create_sac_token(&env, "CUSTOM");
     let owner = Address::generate(&env);
-    let amount: i128 = 50_000; // Custom token amount
+    let amount: i128 = 50_000;
     let salt = Bytes::from_slice(&env, b"custom_refund_salt");
     let timeout_secs = 100u64;
 
-    // Mint custom tokens to owner
     custom_client.mint(&owner, &amount);
 
-    // Deposit with timeout
     let commitment = client.deposit(&custom_token, &amount, &owner, &salt, &timeout_secs, &None);
 
-    // Advance time past expiry
     env.ledger()
         .set_timestamp(env.ledger().timestamp() + timeout_secs + 1);
 
-    // Refund expired escrow
     client.refund(&commitment, &owner);
 
-    // Verify refund completed
     assert_eq!(custom_client.balance(&owner), amount);
     assert_eq!(custom_client.balance(&client.address), 0);
     assert_eq!(
@@ -2333,13 +2288,11 @@ fn test_cross_asset_custom_token_deposit_refund() {
 
 #[test]
 fn test_cross_asset_multiple_tokens_concurrent() {
-    // Test handling multiple different tokens simultaneously
     let (env, client) = setup();
 
-    // Create three different tokens
     let (token_a, client_a) = create_sac_token(&env, "TokenA");
     let (token_b, client_b) = create_sac_token(&env, "TokenB");
-    let token_c = create_test_token(&env); // Use regular test token
+    let token_c = create_test_token(&env);
     let client_c = token::StellarAssetClient::new(&env, &token_c);
 
     let user = Address::generate(&env);
@@ -2347,12 +2300,10 @@ fn test_cross_asset_multiple_tokens_concurrent() {
     let amount_b: i128 = 2000;
     let amount_c: i128 = 3000;
 
-    // Mint all tokens to user
     client_a.mint(&user, &amount_a);
     client_b.mint(&user, &amount_b);
     client_c.mint(&user, &amount_c);
 
-    // Create escrows for all three tokens
     let salt_a = Bytes::from_slice(&env, b"token_a_salt");
     let salt_b = Bytes::from_slice(&env, b"token_b_salt");
     let salt_c = Bytes::from_slice(&env, b"token_c_salt");
@@ -2361,7 +2312,6 @@ fn test_cross_asset_multiple_tokens_concurrent() {
     let commitment_b = client.deposit(&token_b, &amount_b, &user, &salt_b, &0, &None);
     let commitment_c = client.deposit(&token_c, &amount_c, &user, &salt_c, &0, &None);
 
-    // Verify all escrows created
     assert_eq!(
         client.get_commitment_state(&commitment_a),
         Some(EscrowStatus::Pending)
@@ -2375,17 +2325,14 @@ fn test_cross_asset_multiple_tokens_concurrent() {
         Some(EscrowStatus::Pending)
     );
 
-    // Verify contract balances
     assert_eq!(client_a.balance(&client.address), amount_a);
     assert_eq!(client_b.balance(&client.address), amount_b);
     assert_eq!(client_c.balance(&client.address), amount_c);
 
-    // Withdraw all three escrows
     client.withdraw(&token_a, &amount_a, &commitment_a, &user, &salt_a);
     client.withdraw(&token_b, &amount_b, &commitment_b, &user, &salt_b);
     client.withdraw(&token_c, &amount_c, &commitment_c, &user, &salt_c);
 
-    // Verify all withdrawals completed
     assert_eq!(client_a.balance(&user), amount_a);
     assert_eq!(client_b.balance(&user), amount_b);
     assert_eq!(client_c.balance(&user), amount_c);
@@ -2397,19 +2344,16 @@ fn test_cross_asset_multiple_tokens_concurrent() {
 
 #[test]
 fn test_cross_asset_dispute_resolution_multi_token() {
-    // Test dispute resolution with different token types
     let (env, client) = setup();
     let (usdc_token, usdc_client) = create_sac_token(&env, "USDC");
     let owner = Address::generate(&env);
     let arbiter = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let amount: i128 = 50_000_000; // 50 USDC
+    let amount: i128 = 50_000_000;
     let salt = Bytes::from_slice(&env, b"dispute_usdc_salt");
 
-    // Mint USDC
     usdc_client.mint(&owner, &amount);
 
-    // Create escrow with arbiter
     let commitment = client.deposit(
         &usdc_token,
         &amount,
@@ -2419,7 +2363,6 @@ fn test_cross_asset_dispute_resolution_multi_token() {
         &Some(arbiter.clone()),
     );
 
-    // Dispute
     client.dispute(&commitment);
     assert_eq!(
         client.get_commitment_state(&commitment),
@@ -2429,7 +2372,6 @@ fn test_cross_asset_dispute_resolution_multi_token() {
     // Resolve for recipient
     client.resolve_dispute(&arbiter, &commitment, &false, &recipient);
 
-    // Verify resolution
     assert_eq!(usdc_client.balance(&recipient), amount);
     assert_eq!(usdc_client.balance(&client.address), 0);
     assert_eq!(
@@ -2440,50 +2382,42 @@ fn test_cross_asset_dispute_resolution_multi_token() {
 
 #[test]
 fn test_cross_asset_zero_amount_edge_case() {
-    // Test that zero amount deposits are rejected for all token types
     let (env, client) = setup();
     let token = create_test_token(&env);
     let user = Address::generate(&env);
     let salt = Bytes::from_slice(&env, b"zero_amount_salt");
 
-    // Attempt zero amount deposit should fail
     let result = client.try_deposit(&token, &0, &user, &salt, &0, &None);
     assert_eq!(result, Err(Ok(QuickexError::InvalidAmount)));
 }
 
 #[test]
 fn test_cross_asset_large_amount_edge_case() {
-    // Test large amounts work correctly (no overflow issues)
     let (env, client) = setup();
     let token = create_test_token(&env);
     let user = Address::generate(&env);
-    let amount: i128 = i128::MAX / 2; // Very large but safe amount
+    let amount: i128 = i128::MAX / 2;
     let salt = Bytes::from_slice(&env, b"large_amount_salt");
 
     let token_client = token::StellarAssetClient::new(&env, &token);
     token_client.mint(&user, &amount);
 
-    // Deposit large amount
     let commitment = client.deposit(&token, &amount, &user, &salt, &0, &None);
 
-    // Verify deposit succeeded
     assert_eq!(
         client.get_commitment_state(&commitment),
         Some(EscrowStatus::Pending)
     );
     assert_eq!(token_client.balance(&client.address), amount);
 
-    // Withdraw large amount
     client.withdraw(&token, &amount, &commitment, &user, &salt);
 
-    // Verify withdrawal succeeded
     assert_eq!(token_client.balance(&user), amount);
     assert_eq!(token_client.balance(&client.address), 0);
 }
 
 #[test]
 fn test_cross_asset_privacy_preserved_across_tokens() {
-    // Test that privacy settings work correctly regardless of token type
     let (env, client) = setup();
     let (token_a, client_a) = create_sac_token(&env, "TokenA");
     let (_token_b, _client_b) = create_sac_token(&env, "TokenB");
@@ -2492,14 +2426,11 @@ fn test_cross_asset_privacy_preserved_across_tokens() {
     let amount: i128 = 1000;
     let _salt = Bytes::from_slice(&env, b"privacy_multi_salt");
 
-    // Create escrows with privacy enabled
     client_a.mint(&owner, &amount);
     let commitment_a = client.deposit(&token_a, &amount, &owner, &_salt, &0, &None);
 
-    // Enable privacy
     client.set_privacy(&owner, &true);
 
-    // Stranger should not see sensitive details
     let view = client.get_escrow_details(&commitment_a, &stranger).unwrap();
     assert_eq!(view.amount, None);
     assert_eq!(view.owner, None);
@@ -2509,36 +2440,26 @@ fn test_cross_asset_privacy_preserved_across_tokens() {
 
 #[test]
 fn test_cross_asset_deposit_with_commitment_various_tokens() {
-    // Test deposit_with_commitment works with different token types
     let (env, client) = setup();
     let (usdc_token, usdc_client) = create_sac_token(&env, "USDC");
     let user = Address::generate(&env);
     let amount: i128 = 100_000_000;
     let commitment = BytesN::from_array(&env, &[42u8; 32]);
 
-    // Mint USDC
     usdc_client.mint(&user, &amount);
 
-    // Deposit with pre-generated commitment
     client.deposit_with_commitment(&user, &usdc_token, &amount, &commitment, &0, &None);
 
-    // Verify deposit
     assert_eq!(usdc_client.balance(&user), 0);
     assert_eq!(usdc_client.balance(&client.address), amount);
     assert_eq!(
         client.get_commitment_state(&commitment),
         Some(EscrowStatus::Pending)
     );
-
-    // Withdraw using the same commitment
-    let _salt = Bytes::from_slice(&env, b"pre_commitment_salt");
-    // Note: In real usage, the commitment would be created with proper salt
-    // This is simplified for testing the token handling
 }
 
 #[test]
 fn test_cross_asset_token_authorization() {
-    // Test that token transfers require proper authorization
     let env = Env::default();
     env.mock_all_auths();
 
@@ -2556,22 +2477,14 @@ fn test_cross_asset_token_authorization() {
 
     let commitment = BytesN::from_array(&env, &[99u8; 32]);
 
-    // Deposit should require user authorization
     client.deposit_with_commitment(&user, &token_id, &500, &commitment, &0, &None);
 
-    // Verify auth was required (mock_all_auths handles this)
     assert_eq!(token_client.balance(&contract_id), 500);
 }
 
 mod tests {
     use super::*;
 
-    // -----------------------------------------------------------------------
-    // Unit tests for time-lock helpers
-    // -----------------------------------------------------------------------
-
-    /// Simulates an EscrowEntry with controlled expires_at for testing helpers.
-    /// Does not require a full Soroban env — tests the pure logic only.
     mod timelock_unit {
         use super::*;
 
@@ -2588,67 +2501,46 @@ mod tests {
             }
         }
 
-        // INV-2: expires_at == 0 must never be considered expired
         #[test]
         fn non_expiring_escrow_is_never_expired() {
-            // We test the logic branch directly since we can't mock Env here
             let entry = make_entry(0);
-            // expires_at == 0 → is_expired returns false regardless of timestamp
             assert_eq!(
                 entry.expires_at, 0,
                 "INV-2: non-expiring escrow must have expires_at == 0"
             );
         }
 
-        // INV-3: saturating_add must not produce u64::MAX as a valid expires_at
         #[test]
         fn timeout_overflow_is_rejected() {
-            // Simulate what compute_expires_at does:
-            // if now = 100 and timeout = u64::MAX - 50, saturating_add gives u64::MAX
             let now: u64 = 100;
             let timeout: u64 = u64::MAX - 50;
             let result = now.saturating_add(timeout);
             assert_eq!(result, u64::MAX, "saturating_add must cap at u64::MAX");
-            // Our guard rejects u64::MAX — this is the condition compute_expires_at checks
             assert!(
                 result == u64::MAX,
                 "INV-3: u64::MAX expires_at must be rejected"
             );
         }
 
-        // INV-3: a valid large but non-saturating timeout is accepted
         #[test]
         fn valid_large_timeout_is_accepted() {
             let now: u64 = 1_000_000;
-            let timeout: u64 = 86_400 * 365; // 1 year in seconds
+            let timeout: u64 = 86_400 * 365;
             let result = now.saturating_add(timeout);
             assert!(result < u64::MAX, "INV-3: valid timeout must not saturate");
             assert!(result > now, "expires_at must be strictly after now");
         }
 
-        // INV-1 and INV-2: expired escrow logic
         #[test]
         fn expiry_boundary_conditions() {
-            // At exactly expires_at: expired (>=)
             let entry_at_boundary = make_entry(1000);
-            // Simulate: timestamp == expires_at → expired
             assert!(
                 entry_at_boundary.expires_at > 0,
                 "INV-2: expires_at must be > 0 for expiry check to apply"
             );
-
-            // One second before: not expired
-            // One second after: expired
-            // These boundary conditions are verified in integration tests below
-            // since they require env.ledger().timestamp() to be set
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Property-based / fuzz tests (integration, requires soroban test env)
-    // -----------------------------------------------------------------------
-
-    // #[cfg(feature = "testutils")]
     mod fuzz {
         use soroban_sdk::testutils::Address as _;
         use soroban_sdk::Env;
@@ -2671,42 +2563,33 @@ mod tests {
             }
         }
 
-        // INV-1: withdrawal MUST fail at or after expiry for any timestamp value
-        // Fuzz: runs across a range of (created_at, timeout, withdraw_at) triples
         #[test]
         fn fuzz_withdraw_always_fails_at_or_after_expiry() {
             let env = setup_env();
             let test_cases: &[(u64, u64, u64)] = &[
-                // (created_at, timeout_secs, withdraw_attempt_timestamp)
-                (0, 100, 100),          // exactly at expiry
-                (0, 100, 101),          // one second after
-                (0, 100, u64::MAX / 2), // far future
-                (1000, 3600, 4600),     // created later, at expiry boundary
-                (1000, 3600, 4601),     // one second after expiry
-                (1000, 3600, 999_999),  // far after expiry
-                (0, 1, 1),              // minimal timeout, at boundary
-                (0, 1, 2),              // minimal timeout, one after
+                (0, 100, 100),
+                (0, 100, 101),
+                (0, 100, u64::MAX / 2),
+                (1000, 3600, 4600),
+                (1000, 3600, 4601),
+                (1000, 3600, 999_999),
+                (0, 1, 1),
+                (0, 1, 2),
             ];
 
             for &(created_at, timeout_secs, withdraw_at) in test_cases {
                 let expires_at = created_at.saturating_add(timeout_secs);
                 if expires_at == u64::MAX {
-                    continue; // skip overflow cases — compute_expires_at rejects these
+                    continue;
                 }
 
-                // Verify our helper correctly identifies these as expired
-                // by constructing a mock entry and calling is_expired logic directly
                 let entry = dummy_entry(&env, EscrowStatus::Pending, expires_at);
 
-                assert!(
-                    expires_at > 0,
-                    "fuzz: expires_at must be > 0 for INV-1 to apply"
-                );
+                assert!(expires_at > 0, "fuzz: expires_at must be > 0 for INV-1 to apply");
                 assert!(
                     withdraw_at >= expires_at,
                     "fuzz: test case must have withdraw_at >= expires_at"
                 );
-                // is_expired logic: expires_at > 0 && timestamp >= expires_at
                 let expired = entry.expires_at > 0 && withdraw_at >= entry.expires_at;
                 assert!(
                     expired,
@@ -2716,16 +2599,15 @@ mod tests {
             }
         }
 
-        // INV-1: withdrawal MUST succeed before expiry for any valid timestamp
         #[test]
         fn fuzz_withdraw_always_succeeds_before_expiry() {
             let test_cases: &[(u64, u64, u64)] = &[
-                (0, 100, 0),        // created at 0, withdraw immediately
-                (0, 100, 99),       // one second before expiry
-                (0, 100, 50),       // halfway through
-                (1000, 3600, 1000), // at creation time
-                (1000, 3600, 4599), // one second before expiry
-                (0, 86400, 1),      // 1 day timeout, withdraw at t=1
+                (0, 100, 0),
+                (0, 100, 99),
+                (0, 100, 50),
+                (1000, 3600, 1000),
+                (1000, 3600, 4599),
+                (0, 86400, 1),
             ];
 
             for &(created_at, timeout_secs, withdraw_at) in test_cases {
@@ -2743,7 +2625,6 @@ mod tests {
             }
         }
 
-        // INV-2: refund MUST fail if expires_at == 0 regardless of timestamp
         #[test]
         fn fuzz_refund_always_fails_for_non_expiring_escrow() {
             let env = setup_env();
@@ -2752,7 +2633,6 @@ mod tests {
             for &ts in timestamps {
                 let entry = dummy_entry(&env, EscrowStatus::Pending, 0);
 
-                // INV-2: expires_at == 0 → is_expired returns false always
                 let would_be_expired = entry.expires_at > 0 && ts >= entry.expires_at;
                 assert!(
                     !would_be_expired,
@@ -2762,11 +2642,9 @@ mod tests {
             }
         }
 
-        // INV-2: refund MUST fail before expiry even for expiring escrows
         #[test]
         fn fuzz_refund_fails_before_expiry() {
             let test_cases: &[(u64, u64)] = &[
-                // (expires_at, current_timestamp) — all before expiry
                 (100, 0),
                 (100, 99),
                 (100, 50),
@@ -2784,16 +2662,14 @@ mod tests {
             }
         }
 
-        // INV-3: compute_expires_at must reject any input that saturates to u64::MAX
         #[test]
         fn fuzz_timeout_overflow_always_rejected() {
-            // Any (now, timeout) pair where now + timeout >= u64::MAX must be rejected
             let overflow_cases: &[(u64, u64)] = &[
                 (0, u64::MAX),
                 (1, u64::MAX),
-                (100, u64::MAX - 99), // 100 + (MAX-99) = MAX+1 → saturates to MAX
-                (u64::MAX / 2, u64::MAX / 2 + 2), // saturates
-                (u64::MAX - 1, 1),    // MAX-1+1 = MAX exactly
+                (100, u64::MAX - 99),
+                (u64::MAX / 2, u64::MAX / 2 + 2),
+                (u64::MAX - 1, 1),
             ];
 
             for &(now, timeout) in overflow_cases {
@@ -2805,7 +2681,6 @@ mod tests {
                     now,
                     timeout
                 );
-                // Our guard: if result == u64::MAX → InvalidTimeout
                 assert!(
                     result == u64::MAX,
                     "INV-3: saturated result must be caught and rejected"
@@ -2813,20 +2688,19 @@ mod tests {
             }
         }
 
-        // INV-3: valid timeouts must never saturate
         #[test]
         fn fuzz_valid_timeouts_never_saturate() {
             let valid_cases: &[(u64, u64)] = &[
-                (0, 0),               // non-expiring
-                (0, 86400),           // 1 day
-                (0, 86400 * 365),     // 1 year
-                (1_000_000, 86400),   // created later
-                (u64::MAX / 2, 1000), // large now, small timeout
+                (0, 0),
+                (0, 86400),
+                (0, 86400 * 365),
+                (1_000_000, 86400),
+                (u64::MAX / 2, 1000),
             ];
 
             for &(now, timeout) in valid_cases {
                 if timeout == 0 {
-                    continue; // non-expiring, no overflow risk
+                    continue;
                 }
                 let result = now.saturating_add(timeout);
                 assert!(
@@ -2839,7 +2713,6 @@ mod tests {
             }
         }
 
-        // INV-4: neither withdraw nor refund may proceed while Disputed
         #[test]
         fn fuzz_disputed_escrow_blocks_all_fund_movements() {
             let env = setup_env();
@@ -2848,7 +2721,6 @@ mod tests {
             for status in &statuses {
                 let entry = dummy_entry(&env, *status, 0);
 
-                // Both withdraw and refund check: if Disputed → InvalidDisputeState
                 let is_disputed = entry.status == EscrowStatus::Disputed;
                 assert!(
                     is_disputed,
@@ -2857,7 +2729,6 @@ mod tests {
             }
         }
 
-        // INV-5: terminal states must be final
         #[test]
         fn fuzz_terminal_states_are_final() {
             let env = setup_env();
@@ -2866,7 +2737,6 @@ mod tests {
             for status in &terminal_statuses {
                 let entry = dummy_entry(&env, *status, 0);
 
-                // Both withdraw and refund reject non-Pending status
                 let is_terminal =
                     entry.status != EscrowStatus::Pending && entry.status != EscrowStatus::Disputed;
                 assert!(is_terminal, "INV-5: {:?} must be a terminal state", status);

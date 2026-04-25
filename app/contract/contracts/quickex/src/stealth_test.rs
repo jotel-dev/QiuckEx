@@ -6,7 +6,7 @@ use crate::{
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, Map, Symbol, TryIntoVal, Val,
+    token, Address, BytesN, Env, IntoVal, Map, Symbol, TryIntoVal, Val,
 };
 
 // ---------------------------------------------------------------------------

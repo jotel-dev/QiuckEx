@@ -386,6 +386,7 @@ pub(crate) fn publish_platform_wallet_changed(env: &Env, wallet: Address) {
     .publish(env);
 }
 
+#[allow(dead_code)]
 #[contractevent(topics = ["TOPIC_ADMIN", "PauseFlagsChanged"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PauseFlagsChangedEvent {
@@ -397,6 +398,7 @@ pub struct PauseFlagsChangedEvent {
     pub version: u32,
 }
 
+#[allow(dead_code)]
 pub(crate) fn publish_pause_flags_changed(env: &Env, actor: Address, enabled: u64, disabled: u64) {
     PauseFlagsChangedEvent {
         actor,
