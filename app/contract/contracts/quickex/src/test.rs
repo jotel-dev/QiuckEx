@@ -2585,7 +2585,10 @@ mod tests {
 
                 let entry = dummy_entry(&env, EscrowStatus::Pending, expires_at);
 
-                assert!(expires_at > 0, "fuzz: expires_at must be > 0 for INV-1 to apply");
+                assert!(
+                    expires_at > 0,
+                    "fuzz: expires_at must be > 0 for INV-1 to apply"
+                );
                 assert!(
                     withdraw_at >= expires_at,
                     "fuzz: test case must have withdraw_at >= expires_at"
@@ -2743,4 +2746,4 @@ mod tests {
             }
         }
     }
-}
+}

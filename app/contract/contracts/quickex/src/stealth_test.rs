@@ -444,4 +444,4 @@ fn test_event_snapshot_stealth_withdrawn_schema() {
         data_map.get(Symbol::new(&env, "version")).unwrap(),
         2u32.into_val(&env)
     );
-}
+}
