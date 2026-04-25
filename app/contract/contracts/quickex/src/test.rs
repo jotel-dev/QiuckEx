@@ -1791,7 +1791,7 @@ fn test_double_refund_fails() {
     let token = create_test_token(&env);
     let owner = Address::generate(&env);
     let amount: i128 = 1000;
-    let salt = Bytes::from_slice(&env, b"double_refund"));
+    let salt = Bytes::from_slice(&env, b"double_refund");
 
     token::StellarAssetClient::new(&env, &token).mint(&owner, &amount);
     let commitment = client.deposit(&token, &amount, &owner, &salt, &100, &None);
